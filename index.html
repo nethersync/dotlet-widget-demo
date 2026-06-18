@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Embed Test</title>
+</head>
+
+<body>
+    <h1>Partner Site</h1>
+
+    <div id="dotlet-domain-widget"></div>
+
+    <script>
+        // Optional: listen to postMessage events to verify iframe communication
+        window.dotletConfig = {
+            onReady: () => console.log("Widget is ready!"),
+            onResize: (height) => console.log("Widget resized to:", height),
+            onCheckoutRedirect: (url) => console.log("Checkout handoff to:", url)
+        };
+    </script>
+
+    <!-- Use your running Vite server for the script src -->
+    <script src="http://localhost:5173/widget.js" data-dotlet-session-id="YOUR_SESSION_ID_HERE"
+        data-dotlet-token="YOUR_CLIENT_TOKEN_HERE" data-dotlet-container="#dotlet-domain-widget">
+        </script>
+</body>
+
+</html>
