@@ -1,8 +1,16 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 
 export default function Home() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <HomeContent />
+    </Suspense>
+  );
+}
+
+function HomeContent() {
   const [embedUrl, setEmbedUrl] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -47,6 +55,80 @@ export default function Home() {
   };
 
   useEffect(() => {
+    // Check for URL parameters from a checkout return
+    const handleCheckoutReturn = () => {
+      if (typeof window === 'undefined') return;
+
+      const searchParams = new URLSearchParams(window.location.search);
+      const checkoutStatus = searchParams.get('checkout_status');
+      const orderId = searchParams.get('order_id');
+      const hostedSessionId = searchParams.get('hosted_session_id');
+
+      // If we have the required params for a successful return
+      if (checkoutStatus && orderId && hostedSessionId) {
+        const baseUrl = process.env.NEXT_PUBLIC_DOTLET_WIDGET_URL || 'https://checkout.dotlet.net';
+        const returnUrl = new URL(`/embed/sessions/${encodeURIComponent(hostedSessionId)}`, baseUrl);
+        
+        // Pass all relevant params to the widget
+        returnUrl.searchParams.set('checkout_status', checkoutStatus);
+        returnUrl.searchParams.set('order_id', orderId);
+        returnUrl.searchParams.set('hosted_session_id', hostedSessionId);
+
+        const returnToken = searchParams.get('return_token');
+        if (returnToken) {
+          returnUrl.searchParams.set('return_token', returnToken);
+        }
+
+        const token = searchParams.get('token');
+        if (token) {
+          returnUrl.searchParams.set('token', token);
+        }
+
+        const stripeSessionId = searchParams.get('session_id');
+        if (stripeSessionId) {
+          returnUrl.searchParams.set('session_id', stripeSessionId);
+        }
+
+        // Set the embed URL to render the iframe with the return state
+        setEmbedUrl(returnUrl.toString());
+
+        // Cleanup URL params
+        cleanupUrlParams(searchParams);
+      } else if (orderId && !hostedSessionId) {
+        // Handle cancel case where we only get order_id
+        setError("Checkout was cancelled.");
+        cleanupUrlParams(searchParams);
+      }
+    };
+
+    const cleanupUrlParams = (searchParams: URLSearchParams) => {
+      const url = new URL(window.location.href);
+      const removedKeys = [
+        'checkout_status',
+        'order_id',
+        'hosted_session_id',
+        'return_token',
+        'token',
+        'session_id'
+      ];
+
+      let changed = false;
+      for (const key of removedKeys) {
+        if (url.searchParams.has(key)) {
+          url.searchParams.delete(key);
+          changed = true;
+        }
+      }
+
+      if (changed) {
+        const nextSearch = url.searchParams.toString();
+        const nextUrl = `${url.pathname}${nextSearch ? `?${nextSearch}` : ''}${url.hash}`;
+        window.history.replaceState({}, document.title, nextUrl);
+      }
+    };
+
+    handleCheckoutReturn();
+
     const handleMessage = (event: MessageEvent) => {
       // In production, we'd verify event.origin
       const data = event.data;
@@ -67,13 +149,14 @@ export default function Home() {
           }
           break;
         case "success":
-          setSuccessMessage(
-            `Domain flow completed successfully! Order ID: ${data.orderId || "N/A"}`
-          );
-          setEmbedUrl(null); // Close the iframe
+          // According to option A, we don't immediately close the widget.
+          // The widget will show its own success UI.
+          // setSuccessMessage(`Domain flow completed successfully! Order ID: ${data.orderId || "N/A"}`);
+          // setEmbedUrl(null); 
           break;
         case "cancel":
           console.log("User cancelled checkout");
+          setError("Checkout was cancelled.");
           setEmbedUrl(null); // Close the iframe
           break;
         case "error":
